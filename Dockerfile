@@ -31,11 +31,14 @@ RUN .venv/bin/python3.13 -c "import torch;torch.hub.load_state_dict_from_url('ht
 RUN .venv/bin/pip install gsplat==1.5.2 --extra-index-url https://docs.gsplat.studio/whl/pt24cu126
 
 # Copy other files
-COPY . /app
+COPY requirements.txt /app/requirements.txt
+COPY requirements-webui.txt /app/requirements-webui.txt
 
 RUN .venv/bin/pip install -r requirements.txt
 RUN .venv/bin/pip install -r requirements-webui.txt
 RUN .venv/bin/pip install flask
 RUN .venv/bin/pip install -e .
+
+COPY . /app
 
 CMD [".venv/bin/python3.13", "-u", "/app/webui.py", "--host", "0.0.0.0"]
