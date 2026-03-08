@@ -7,6 +7,110 @@ This software project accompanies the research paper: _Sharp Monocular View Synt
 by _Lars Mescheder, Wei Dong, Shiwei Li, Xuyang Bai, Marcel Santos, Peiyun Hu, Bruno Lecouat, Mingmin Zhen, Amaël Delaunoy,
 Tian Fang, Yanghai Tsin, Stephan Richter and Vladlen Koltun_.
 
+## Example Deployment
+
+```yaml
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: ${APP_NAME}
+  namespace: ${APP_NAMESPACE}
+spec:
+  interval: 10m
+  chart:
+    spec:
+      chart: app-template
+      version: 4.0.1
+      sourceRef:
+        kind: HelmRepository
+        name: bjw-s-charts
+        namespace: flux-system
+
+  values:
+    defaultPodOptions:
+      runtimeClassName: "nvidia"
+    controllers:
+      ${APP_NAME}:
+        containers:
+          app:
+            image:
+              repository:  git.gpu.lan/r/ml-sharp-video
+              tag: "latest@sha256:68ab13e8913c7194066885a8415a62dc66763b3081ea8bbe68beed8d58a7e3da"
+            env:
+              NVIDIA_VISIBLE_DEVICES: 0
+              NVIDIA_DRIVER_CAPABILITIES: all
+      filebrowser:
+        containers:
+          app:
+            image:
+              repository: docker.io/filebrowser/filebrowser
+              tag: "v2.32.0"
+            env:
+              TZ: "${CONFIG_TIMEZONE}"
+              FB_DATABASE: /data/filebrowser.db
+              FB_ROOT: /data
+              FB_LOG: stdout
+              FB_NOAUTH: true
+
+    service:
+      webui:
+        controller: ${APP_NAME}
+        ports:
+          http:
+            port: 7860
+      filebrowser:
+        controller: filebrowser
+        ports:
+          http:
+            port: 80
+
+    ingress:
+      webui:
+        className: traefik
+        annotations:
+          traefik.ingress.kubernetes.io/router.entrypoints: websecure
+        hosts:
+          - host: &ingress1 "ml-sharp-video.${SECRET_DOMAIN}"
+            paths:
+              - path: /
+                pathType: Prefix
+                service:
+                  identifier: webui
+                  port: http
+        tls:
+          - hosts:
+              - *ingress1
+      browser:
+        className: traefik
+        annotations:
+          traefik.ingress.kubernetes.io/router.entrypoints: websecure
+        hosts:
+          - host: &ingress2 "ml-sharp-video-browser.${SECRET_DOMAIN}"
+            paths:
+              - path: /
+                pathType: Prefix
+                service:
+                  identifier: filebrowser
+                  port: http
+        tls:
+          - hosts:
+              - *ingress2
+
+    persistence:
+      output:
+        suffix: output
+        accessMode: ReadWriteOnce
+        size: 32Gi
+        storageClass: "local-hostpath"
+        advancedMounts:
+          ${APP_NAME}:
+            app:
+              - path: /app/output
+          filebrowser:
+            app:
+              - path: /data
+
+```
 ## WebUI
 
 This fork includes a browser-based WebUI for generating and viewing 3D Gaussian Splats without using the command line. (https://github.com/Blizaine/ml-sharp)
